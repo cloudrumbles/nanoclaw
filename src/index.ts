@@ -188,6 +188,13 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       resetIdleTimer();
     }
 
+    // Agent finished processing query, now idle-waiting for IPC input.
+    // Notify queue so pending scheduled tasks can preempt the idle container.
+    if (result.status === 'success' && !result.result) {
+      queue.notifyIdle(chatJid);
+      resetIdleTimer();
+    }
+
     if (result.status === 'error') {
       hadError = true;
     }
