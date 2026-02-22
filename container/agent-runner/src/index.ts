@@ -424,14 +424,11 @@ async function runQuery(
         ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
         : undefined,
       allowedTools: [
-        'Bash',
-        'Read', 'Write', 'Edit', 'Glob', 'Grep',
-        'WebSearch', 'WebFetch',
+        // Orchestrator: delegate all heavy work to subagents to prevent context bloat
         'Task', 'TaskOutput', 'TaskStop',
         'TeamCreate', 'TeamDelete', 'SendMessage',
-        'TodoWrite', 'ToolSearch', 'Skill',
-        'NotebookEdit',
-        'mcp__nanoclaw__*'
+        'TodoWrite', 'ToolSearch',
+        'mcp__nanoclaw__*',
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
