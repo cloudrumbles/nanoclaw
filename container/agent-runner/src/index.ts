@@ -389,6 +389,7 @@ async function runQuery(
   let lastAssistantUuid: string | undefined;
   let messageCount = 0;
   let resultCount = 0;
+  let lastEmittedText: string | null = null;
 
   // Load global CLAUDE.md as additional system context (shared across all groups)
   const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
@@ -459,6 +460,24 @@ async function runQuery(
       lastAssistantUuid = (message as { uuid: string }).uuid;
     }
 
+    // Emit text from assistant messages so intermediate responses
+    // (e.g. text before tool calls) are sent to the user immediately.
+    if (message.type === 'assistant') {
+      const content = (message as { message?: { content?: Array<{ type: string; text?: string }> } }).message?.content;
+      if (Array.isArray(content)) {
+        const text = content
+          .filter((c) => c.type === 'text')
+          .map((c) => c.text || '')
+          .join('');
+        if (text) {
+          resultCount++;
+          log(`Result #${resultCount}: assistant text=${text.slice(0, 200)}`);
+          writeOutput({ status: 'success', result: text, newSessionId });
+          lastEmittedText = text;
+        }
+      }
+    }
+
     if (message.type === 'system' && message.subtype === 'init') {
       newSessionId = message.session_id;
       log(`Session initialized: ${newSessionId}`);
@@ -470,14 +489,17 @@ async function runQuery(
     }
 
     if (message.type === 'result') {
-      resultCount++;
       const textResult = 'result' in message ? (message as { result?: string }).result : null;
-      log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
-      writeOutput({
-        status: 'success',
-        result: textResult || null,
-        newSessionId
-      });
+      // Only emit result text if it differs from the last assistant text (avoid duplicates)
+      if (textResult && textResult !== lastEmittedText) {
+        resultCount++;
+        log(`Result #${resultCount}: subtype=${message.subtype} text=${textResult.slice(0, 200)}`);
+        writeOutput({ status: 'success', result: textResult, newSessionId });
+      } else {
+        // Emit completion marker (no text) for idle tracking
+        writeOutput({ status: 'success', result: null, newSessionId });
+      }
+      lastEmittedText = null;
     }
   }
 
